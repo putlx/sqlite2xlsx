@@ -15,8 +15,8 @@ import (
 
 func usage() {
 	fmt.Println("usage: sqlite2xlsx database... [options]")
-	fmt.Println(" -h, --help   display this information and exit")
-	fmt.Println(" -p <TABLE>   primary tables, each of them recursively left joins its reference tables")
+	fmt.Println("  -h, --help  display this information and exit")
+	fmt.Println("  -p <TABLE>  primary tables, each of them recursively left joins its reference tables")
 }
 
 func main() {
@@ -47,13 +47,13 @@ func main() {
 			fmt.Println("no such file: " + database)
 			continue
 		}
-		if err := sqliteToXLSX(database, pTables); err != nil {
+		if err := sqliteToXLSX(database, pTables...); err != nil {
 			fmt.Printf("%s: %s\n", database, err)
 		}
 	}
 }
 
-func sqliteToXLSX(dataSourceName string, pTables []string) error {
+func sqliteToXLSX(dataSourceName string, pTables ...string) error {
 	db, err := sql.Open("sqlite3", dataSourceName)
 	if err != nil {
 		return err
@@ -62,7 +62,6 @@ func sqliteToXLSX(dataSourceName string, pTables []string) error {
 	f := excelize.NewFile()
 	sheetIndex := 0
 
-	storedTables := make(map[string]bool)
 	for _, pTable := range pTables {
 		rows, err := db.Query("SELECT * FROM sqlite_master WHERE name = ? AND (type = 'table' OR type = 'view')", pTable)
 		if err != nil {
@@ -78,9 +77,6 @@ func sqliteToXLSX(dataSourceName string, pTables []string) error {
 		var columns, conditions []string
 		if err = findForeignKeys(db, pTable, &tableSet, &columns, &conditions); err != nil {
 			return err
-		}
-		for table := range tableSet {
-			storedTables[table] = true
 		}
 		delete(tableSet, pTable)
 		tables := make([]string, 0, len(tableSet))
@@ -110,7 +106,14 @@ func sqliteToXLSX(dataSourceName string, pTables []string) error {
 			tables.Close()
 			return err
 		}
-		if !storedTables[table] {
+		stored := false
+		for _, pTable := range pTables {
+			if table == pTable {
+				stored = true
+				break
+			}
+		}
+		if !stored {
 			sheetIndex = f.NewSheet(table)
 			if err = makeXLSXFromSQL(f, table, db, "SELECT * FROM "+table, nil); err != nil {
 				tables.Close()
